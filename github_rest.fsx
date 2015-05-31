@@ -1,8 +1,3 @@
-#r "packages/FSharp.Data/lib/net40/FSharp.Data.dll"
-
-open System
-open FSharp.Data
-open FSharp.Data.JsonExtensions
 
 let http_request url =
   Http.RequestString(url,
