@@ -9,14 +9,19 @@ open FSharp.Data.JsonExtensions
 
 [<AutoOpen>]
 module Jira =
-  type Client = {
-      Server : string
-      Api : string
-      User : string
-      Password : string
-  }
+  type Jira = {
+        Server : string
+        Api : string
+        User : string
+        Password : string }
 
-  let BuildHeaders (jira: Client) =
+  type Issue = {
+        Id : string
+        Summary : string
+        Url : string }
+
+
+  let BuildHeaders (jira: Jira) =
     let headers = [
       HttpRequestHeaders.UserAgent ""
       HttpRequestHeaders.ContentType HttpContentTypes.Json
@@ -26,13 +31,24 @@ module Jira =
       then headers |> List.append [HttpRequestHeaders.BasicAuth jira.User jira.Password ]
       else headers
 
-  let Search (jira: Client) jql max_results =
-    let url = sprintf "%s/%s/search?jql=%s&fields=id,key,summary&maxResults=%i" jira.Server jira.Api jql max_results
-    Http.RequestString(url,
-      httpMethod = HttpMethod.Get,
-      headers = BuildHeaders jira
-      )
-    |> JsonValue.Parse
+  let Search jql max_results (jira: Jira) =
+    let url = sprintf "%s/%s/search" jira.Server jira.Api
+    let result =
+      Http.RequestString(url,
+        query   = [
+          "jql", jql;
+          "fields", "id,key,summary";
+          "maxResults", sprintf "%i" max_results ],
+        httpMethod = HttpMethod.Get,
+        headers = BuildHeaders jira )
+      |> JsonValue.Parse
 
-  type Client with
-    member this.Search = Search this
+    let total = result?total.AsInteger()
+    if total > max_results
+      then printfn "%i issues matched but only %i will be returned" total max_results
+
+    result?issues.AsArray()
+      |> Seq.map (fun issue ->
+        { Id = issue?key.AsString()
+          Summary = issue?fields?summary.AsString()
+          Url = issue?self.AsString() })
